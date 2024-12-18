@@ -28,6 +28,7 @@
             background-color: #000;
             border: 2px solid #7F8C8D;
             margin-bottom: 20px;
+            image-rendering: pixelated;
         }
         .control-panel {
             display: flex;
@@ -60,6 +61,14 @@
             background-color: #3498DB;
             color: #000;
         }
+        #debug-output {
+            background-color: #000;
+            color: #00FF00;
+            font-family: 'Courier New', monospace;
+            padding: 10px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -69,9 +78,9 @@
         <div class="control-panel">
             <select id="program-selector">
                 <option value="">Select Program</option>
-                <option value="simple-graphics">Simple Graphics</option>
-                <option value="pixel-draw">Pixel Drawing</option>
-                <option value="sprite-move">Sprite Movement</option>
+                <option value="color-grid">Color Grid</option>
+                <option value="pixel-patterns">Pixel Patterns</option>
+                <option value="sprite-demo">Sprite Demo</option>
             </select>
             
             <div>
@@ -87,9 +96,17 @@
             <div>Y: <span id="reg-y">00</span></div>
             <div>PC: <span id="program-counter">00</span></div>
         </div>
+
+        <div id="debug-output"></div>
     </div>
 
     <script>
+        // Debugging function
+        function debug(message) {
+            const debugOutput = document.getElementById('debug-output');
+            debugOutput.textContent += message + '\n';
+        }
+
         // 8-Bit Computer Simulator
         class EightBitComputer {
             constructor(screen) {
@@ -107,80 +124,131 @@
                 screen.width = 256;
                 screen.height = 192;
                 this.ctx.imageSmoothingEnabled = false;
+
+                debug("Computer initialized");
             }
 
-            // Programs
+            // Programs with more interesting graphics
             programs = {
-                'simple-graphics': [
-                    0x20, 0x40, 0x00,  // Fill screen with color
-                    0x10, 0x80, 0x00,  // Draw pattern
+                'color-grid': [
+                    0x20, 0xFF, 0x00,  // Clear screen with white
+                    0x21, 0x10, 0x00,  // Set color mode
+                    0x22, 0x16, 0x08,  // Draw color grid
                     0xFF              // End program
                 ],
-                'pixel-draw': [
-                    0x21, 0x50, 0x00,  // Set drawing color
-                    0x22, 0x10, 0x20,  // Draw pixel grid
+                'pixel-patterns': [
+                    0x20, 0x00, 0x00,  // Clear screen with black
+                    0x21, 0x20, 0x00,  // Set pattern mode
+                    0x23, 0x08, 0x04,  // Create pattern
                     0xFF              // End program
                 ],
-                'sprite-move': [
-                    0x23, 0x00, 0x00,  // Initialize sprite position
-                    0x24, 0x01, 0x02,  // Move sprite
+                'sprite-demo': [
+                    0x20, 0x7F, 0x00,  // Clear screen with mid-gray
+                    0x21, 0x30, 0x00,  // Set sprite mode
+                    0x24, 0x64, 0x32,  // Draw sprite
                     0xFF              // End program
                 ]
             };
 
             loadProgram(programName) {
+                debug(`Loading program: ${programName}`);
                 const program = this.programs[programName];
-                if (!program) return false;
+                if (!program) {
+                    debug("Program not found");
+                    return false;
+                }
 
-                // Reset registers
+                // Reset registers and screen
                 this.registers.A = 0;
                 this.registers.X = 0;
                 this.registers.Y = 0;
                 this.registers.PC = 0;
+                
+                // Clear screen with a white background
+                this.ctx.fillStyle = 'white';
+                this.ctx.fillRect(0, 0, this.screen.width, this.screen.height);
 
                 // Load program into memory
                 this.memory.set(program, 0);
+                debug(`Program loaded: ${program.join(', ')}`);
                 return true;
             }
 
             executeInstruction() {
                 const opcode = this.memory[this.registers.PC];
+                debug(`Executing opcode: 0x${opcode.toString(16).toUpperCase().padStart(2, '0')}`);
                 
                 switch(opcode) {
-                    case 0x20: // Fill screen
-                        this.ctx.fillStyle = `rgb(${this.memory[this.registers.PC + 1]}, 0, 0)`;
+                    case 0x20: // Clear screen
+                        const clearColor = this.memory[this.registers.PC + 1];
+                        this.ctx.fillStyle = `rgb(${clearColor}, ${clearColor}, ${clearColor})`;
                         this.ctx.fillRect(0, 0, this.screen.width, this.screen.height);
+                        debug(`Cleared screen with color: rgb(${clearColor}, ${clearColor}, ${clearColor})`);
                         this.registers.PC += 2;
                         break;
                     
-                    case 0x21: // Set drawing color
+                    case 0x21: // Set color/mode
                         this.registers.A = this.memory[this.registers.PC + 1];
+                        debug(`Set accumulator: 0x${this.registers.A.toString(16).toUpperCase().padStart(2, '0')}`);
                         this.registers.PC += 2;
                         break;
                     
-                    case 0x22: // Draw pixel grid
-                        for (let x = 0; x < this.screen.width; x += 16) {
-                            for (let y = 0; y < this.screen.height; y += 16) {
-                                this.ctx.fillStyle = `rgb(${this.registers.A}, 0, 0)`;
-                                this.ctx.fillRect(x, y, 16, 16);
+                    case 0x22: // Draw color grid
+                        const gridSize = this.memory[this.registers.PC + 1];
+                        const colorVariation = this.memory[this.registers.PC + 2];
+                        
+                        for (let x = 0; x < this.screen.width; x += gridSize) {
+                            for (let y = 0; y < this.screen.height; y += gridSize) {
+                                // Create a more visible color gradient
+                                const r = Math.floor((x / this.screen.width) * 255);
+                                const g = Math.floor((y / this.screen.height) * 255);
+                                const b = Math.floor(((x + y) / (this.screen.width + this.screen.height)) * 255);
+                                
+                                this.ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                                this.ctx.fillRect(x, y, gridSize, gridSize);
                             }
                         }
+                        debug(`Drew color grid with grid size: ${gridSize}`);
                         this.registers.PC += 2;
                         break;
                     
-                    case 0x23: // Initialize sprite position
-                        this.registers.X = this.memory[this.registers.PC + 1];
-                        this.registers.Y = this.memory[this.registers.PC + 2];
+                    case 0x23: // Create pixel pattern
+                        const patternSize = this.memory[this.registers.PC + 1];
+                        const patternDensity = this.memory[this.registers.PC + 2];
+                        
+                        for (let x = 0; x < this.screen.width; x += patternSize) {
+                            for (let y = 0; y < this.screen.height; y += patternSize) {
+                                // Create more visible checkerboard pattern
+                                if ((Math.floor(x / patternSize) + Math.floor(y / patternSize)) % patternDensity === 0) {
+                                    this.ctx.fillStyle = 'blue';
+                                } else {
+                                    this.ctx.fillStyle = 'yellow';
+                                }
+                                this.ctx.fillRect(x, y, patternSize, patternSize);
+                            }
+                        }
+                        debug(`Created pixel pattern with size: ${patternSize}, density: ${patternDensity}`);
                         this.registers.PC += 2;
                         break;
                     
-                    case 0x24: // Move sprite
-                        this.registers.X += this.memory[this.registers.PC + 1];
-                        this.registers.Y += this.memory[this.registers.PC + 2];
+                    case 0x24: // Draw sprite
+                        const spriteX = this.memory[this.registers.PC + 1];
+                        const spriteY = this.memory[this.registers.PC + 2];
+                        
+                        // Draw a more visible sprite
+                        this.ctx.fillStyle = 'red';
+                        this.ctx.fillRect(spriteX, spriteY, 32, 32);
+                        this.ctx.fillStyle = 'green';
+                        this.ctx.fillRect(spriteX + 10, spriteY + 10, 12, 12);
+                        this.ctx.fillStyle = 'blue';
+                        this.ctx.fillRect(spriteX + 20, spriteY + 20, 8, 8);
+                        
+                        debug(`Drew sprite at (${spriteX}, ${spriteY})`);
                         this.registers.PC += 2;
                         break;
                     
                     case 0xFF: // End program
+                        debug("Program ended");
                         return false;
                 }
                 
@@ -208,6 +276,9 @@
 
         // Event Listeners
         document.getElementById('load-btn').addEventListener('click', () => {
+            // Clear previous debug output
+            document.getElementById('debug-output').textContent = '';
+
             const programSelector = document.getElementById('program-selector');
             const selectedProgram = programSelector.value;
             
