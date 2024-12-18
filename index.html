@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Computer Simulator</title>
+    <style>
+        body {
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        #computer {
+            background-color: #333;
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #screen {
+            width: 400px;
+            height: 300px;
+            background-color: #000;
+            margin-bottom: 20px;
+            border: 2px solid #666;
+        }
+        #controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #programSelector, #speedControl {
+            padding: 5px;
+        }
+        #codeDisplay {
+            width: 400px;
+            height: 150px;
+            background-color: #f4f4f4;
+            border: 1px solid #ccc;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="computer">
+        <canvas id="screen"></canvas>
+        
+        <div id="controls">
+            <select id="programSelector">
+                <option value="">Select a Program</option>
+                <option value="pixelArt">Pixel Art</option>
+                <option value="mouseTracker">Mouse Tracker</option>
+                <option value="simpleAnimation">Simple Animation</option>
+            </select>
+            
+            <input type="range" id="speedControl" min="50" max="2000" value="500">
+            <span id="speedDisplay">500ms</span>
+            
+            <button id="runButton">Run</button>
+            <button id="stopButton">Stop</button>
+        </div>
+        
+        <div id="codeDisplay"></div>
+    </div>
+
+    <script>
+        const screen = document.getElementById('screen');
+        const ctx = screen.getContext('2d');
+        const programSelector = document.getElementById('programSelector');
+        const speedControl = document.getElementById('speedControl');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const runButton = document.getElementById('runButton');
+        const stopButton = document.getElementById('stopButton');
+        const codeDisplay = document.getElementById('codeDisplay');
+
+        screen.width = 400;
+        screen.height = 300;
+
+        const programs = {
+            pixelArt: `
+function draw() {
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, screen.width, screen.height);
+    
+    for (let x = 0; x < 10; x++) {
+        for (let y = 0; y < 10; y++) {
+            ctx.fillStyle = 'hsl(' + (x * 36) + ', 100%, 50%)';
+            ctx.fillRect(x * 40, y * 30, 40, 30);
+        }
+    }
+}`,
+            mouseTracker: `
+let tracking = false;
+
+function onMouseMove(e) {
+    if (!tracking) return;
+    
+    const rect = screen.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    ctx.clearRect(0, 0, screen.width, screen.height);
+    ctx.fillStyle = 'red';
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = 'white';
+    ctx.font = '20px monospace';
+    ctx.fillText('X: ' + x + ', Y: ' + y, 10, 290);
+}
+
+function enableTracking() {
+    tracking = true;
+    screen.addEventListener('mousemove', onMouseMove);
+}
+
+function disableTracking() {
+    tracking = false;
+    screen.removeEventListener('mousemove', onMouseMove);
+}`,
+            simpleAnimation: `
+let angle = 0;
+
+function draw() {
+    ctx.clearRect(0, 0, screen.width, screen.height);
+    
+    ctx.save();
+    ctx.translate(screen.width / 2, screen.height / 2);
+    ctx.rotate(angle);
+    
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(-50, -50, 100, 100);
+    
+    ctx.restore();
+    
+    angle += 0.1;
+}`
+        };
+
+        let currentProgram = null;
+        let animationFrame = null;
+        let executionContext = null;
+
+        programSelector.addEventListener('change', (e) => {
+            const programName = e.target.value;
+            if (programName) {
+                currentProgram = programs[programName];
+                codeDisplay.textContent = currentProgram;
+            }
+        });
+
+        speedControl.addEventListener('input', (e) => {
+            speedDisplay.textContent = `${e.target.value}ms`;
+        });
+
+        runButton.addEventListener('click', () => {
+            if (!currentProgram) return;
+
+            // Stop any existing animation
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+
+            // Clear the screen
+            ctx.clearRect(0, 0, screen.width, screen.height);
+
+            // Create a new execution context
+            executionContext = {
+                ctx: ctx,
+                screen: screen,
+                draw: null,
+                enableTracking: null,
+                disableTracking: null
+            };
+
+            // Wrap the program in a function to create a local scope
+            const programWrapper = new Function('ctx', 'screen', 
+                `with({ctx: ctx, screen: screen}) {
+                    ${currentProgram}
+                    return { 
+                        draw: typeof draw === 'function' ? draw : null,
+                        enableTracking: typeof enableTracking === 'function' ? enableTracking : null,
+                        disableTracking: typeof disableTracking === 'function' ? disableTracking : null
+                    };
+                }`
+            );
+
+            // Execute the program and get available functions
+            const programFunctions = programWrapper(ctx, screen);
+
+            // Run draw function if available
+            if (programFunctions.draw) {
+                function animate() {
+                    programFunctions.draw();
+                    animationFrame = requestAnimationFrame(animate);
+                }
+                animate();
+            }
+
+            // Enable mouse tracking if available
+            if (programFunctions.enableTracking) {
+                programFunctions.enableTracking();
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+            
+            // Disable mouse tracking if exists
+            const programSelector = document.getElementById('programSelector');
+            const currentProgram = programSelector.value;
+            
+            if (currentProgram === 'mouseTracker') {
+                screen.removeEventListener('mousemove', onMouseMove);
+            }
+
+            ctx.clearRect(0, 0, screen.width, screen.height);
+        });
+    </script>
+</body>
+</html>
