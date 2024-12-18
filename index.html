@@ -2,49 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Simple Computer Simulator</title>
+    <title>8-Bit Computer Simulator</title>
     <style>
         body {
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
+            background-color: #2C3E50;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            background-color: #f0f0f0;
-            padding: 20px;
+            min-height: 100vh;
+            margin: 0;
+            color: #ECF0F1;
         }
         #computer {
-            background-color: #333;
+            background-color: #34495E;
+            border: 4px solid #2C3E50;
             border-radius: 10px;
+            width: 800px;
             padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
         }
         #screen {
-            width: 400px;
-            height: 300px;
+            width: 100%;
+            height: 400px;
             background-color: #000;
+            border: 2px solid #7F8C8D;
             margin-bottom: 20px;
-            border: 2px solid #666;
         }
-        #controls {
+        .control-panel {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        #programSelector, #speedControl {
-            padding: 5px;
-        }
-        #codeDisplay {
-            width: 400px;
-            height: 150px;
-            background-color: #f4f4f4;
-            border: 1px solid #ccc;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-family: monospace;
+            justify-content: space-between;
+            background-color: #2C3E50;
             padding: 10px;
+            border-radius: 5px;
+        }
+        .register-display {
+            display: flex;
+            justify-content: space-around;
+            background-color: #000;
+            color: #00FF00;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            margin-top: 10px;
+        }
+        button {
+            background-color: #2ECC71;
+            border: none;
+            color: #000;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #7F8C8D;
+            cursor: not-allowed;
+        }
+        select {
+            background-color: #3498DB;
+            color: #000;
         }
     </style>
 </head>
@@ -52,180 +66,172 @@
     <div id="computer">
         <canvas id="screen"></canvas>
         
-        <div id="controls">
-            <select id="programSelector">
-                <option value="">Select a Program</option>
-                <option value="pixelArt">Pixel Art</option>
-                <option value="mouseTracker">Mouse Tracker</option>
-                <option value="simpleAnimation">Simple Animation</option>
+        <div class="control-panel">
+            <select id="program-selector">
+                <option value="">Select Program</option>
+                <option value="simple-graphics">Simple Graphics</option>
+                <option value="pixel-draw">Pixel Drawing</option>
+                <option value="sprite-move">Sprite Movement</option>
             </select>
             
-            <input type="range" id="speedControl" min="50" max="2000" value="500">
-            <span id="speedDisplay">500ms</span>
-            
-            <button id="runButton">Run</button>
-            <button id="stopButton">Stop</button>
+            <div>
+                <button id="load-btn">LOAD</button>
+                <button id="run-btn">RUN</button>
+                <button id="stop-btn">STOP</button>
+            </div>
         </div>
         
-        <div id="codeDisplay"></div>
+        <div class="register-display">
+            <div>A: <span id="reg-a">00</span></div>
+            <div>X: <span id="reg-x">00</span></div>
+            <div>Y: <span id="reg-y">00</span></div>
+            <div>PC: <span id="program-counter">00</span></div>
+        </div>
     </div>
 
     <script>
-        const screen = document.getElementById('screen');
-        const ctx = screen.getContext('2d');
-        const programSelector = document.getElementById('programSelector');
-        const speedControl = document.getElementById('speedControl');
-        const speedDisplay = document.getElementById('speedDisplay');
-        const runButton = document.getElementById('runButton');
-        const stopButton = document.getElementById('stopButton');
-        const codeDisplay = document.getElementById('codeDisplay');
-
-        screen.width = 400;
-        screen.height = 300;
-
-        const programs = {
-            pixelArt: `
-function draw() {
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, screen.width, screen.height);
-    
-    for (let x = 0; x < 10; x++) {
-        for (let y = 0; y < 10; y++) {
-            ctx.fillStyle = 'hsl(' + (x * 36) + ', 100%, 50%)';
-            ctx.fillRect(x * 40, y * 30, 40, 30);
-        }
-    }
-}`,
-            mouseTracker: `
-let tracking = false;
-
-function onMouseMove(e) {
-    if (!tracking) return;
-    
-    const rect = screen.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    ctx.clearRect(0, 0, screen.width, screen.height);
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(x, y, 20, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '20px monospace';
-    ctx.fillText('X: ' + x + ', Y: ' + y, 10, 290);
-}
-
-function enableTracking() {
-    tracking = true;
-    screen.addEventListener('mousemove', onMouseMove);
-}
-
-function disableTracking() {
-    tracking = false;
-    screen.removeEventListener('mousemove', onMouseMove);
-}`,
-            simpleAnimation: `
-let angle = 0;
-
-function draw() {
-    ctx.clearRect(0, 0, screen.width, screen.height);
-    
-    ctx.save();
-    ctx.translate(screen.width / 2, screen.height / 2);
-    ctx.rotate(angle);
-    
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(-50, -50, 100, 100);
-    
-    ctx.restore();
-    
-    angle += 0.1;
-}`
-        };
-
-        let currentProgram = null;
-        let animationFrame = null;
-        let executionContext = null;
-
-        programSelector.addEventListener('change', (e) => {
-            const programName = e.target.value;
-            if (programName) {
-                currentProgram = programs[programName];
-                codeDisplay.textContent = currentProgram;
-            }
-        });
-
-        speedControl.addEventListener('input', (e) => {
-            speedDisplay.textContent = `${e.target.value}ms`;
-        });
-
-        runButton.addEventListener('click', () => {
-            if (!currentProgram) return;
-
-            // Stop any existing animation
-            if (animationFrame) {
-                cancelAnimationFrame(animationFrame);
+        // 8-Bit Computer Simulator
+        class EightBitComputer {
+            constructor(screen) {
+                this.screen = screen;
+                this.ctx = screen.getContext('2d');
+                this.memory = new Uint8Array(256);
+                this.registers = {
+                    A: 0,   // Accumulator
+                    X: 0,   // X Index Register
+                    Y: 0,   // Y Index Register
+                    PC: 0   // Program Counter
+                };
+                
+                // Initialize screen
+                screen.width = 256;
+                screen.height = 192;
+                this.ctx.imageSmoothingEnabled = false;
             }
 
-            // Clear the screen
-            ctx.clearRect(0, 0, screen.width, screen.height);
-
-            // Create a new execution context
-            executionContext = {
-                ctx: ctx,
-                screen: screen,
-                draw: null,
-                enableTracking: null,
-                disableTracking: null
+            // Programs
+            programs = {
+                'simple-graphics': [
+                    0x20, 0x40, 0x00,  // Fill screen with color
+                    0x10, 0x80, 0x00,  // Draw pattern
+                    0xFF              // End program
+                ],
+                'pixel-draw': [
+                    0x21, 0x50, 0x00,  // Set drawing color
+                    0x22, 0x10, 0x20,  // Draw pixel grid
+                    0xFF              // End program
+                ],
+                'sprite-move': [
+                    0x23, 0x00, 0x00,  // Initialize sprite position
+                    0x24, 0x01, 0x02,  // Move sprite
+                    0xFF              // End program
+                ]
             };
 
-            // Wrap the program in a function to create a local scope
-            const programWrapper = new Function('ctx', 'screen', 
-                `with({ctx: ctx, screen: screen}) {
-                    ${currentProgram}
-                    return { 
-                        draw: typeof draw === 'function' ? draw : null,
-                        enableTracking: typeof enableTracking === 'function' ? enableTracking : null,
-                        disableTracking: typeof disableTracking === 'function' ? disableTracking : null
-                    };
-                }`
-            );
+            loadProgram(programName) {
+                const program = this.programs[programName];
+                if (!program) return false;
 
-            // Execute the program and get available functions
-            const programFunctions = programWrapper(ctx, screen);
+                // Reset registers
+                this.registers.A = 0;
+                this.registers.X = 0;
+                this.registers.Y = 0;
+                this.registers.PC = 0;
 
-            // Run draw function if available
-            if (programFunctions.draw) {
-                function animate() {
-                    programFunctions.draw();
-                    animationFrame = requestAnimationFrame(animate);
-                }
-                animate();
+                // Load program into memory
+                this.memory.set(program, 0);
+                return true;
             }
 
-            // Enable mouse tracking if available
-            if (programFunctions.enableTracking) {
-                programFunctions.enableTracking();
+            executeInstruction() {
+                const opcode = this.memory[this.registers.PC];
+                
+                switch(opcode) {
+                    case 0x20: // Fill screen
+                        this.ctx.fillStyle = `rgb(${this.memory[this.registers.PC + 1]}, 0, 0)`;
+                        this.ctx.fillRect(0, 0, this.screen.width, this.screen.height);
+                        this.registers.PC += 2;
+                        break;
+                    
+                    case 0x21: // Set drawing color
+                        this.registers.A = this.memory[this.registers.PC + 1];
+                        this.registers.PC += 2;
+                        break;
+                    
+                    case 0x22: // Draw pixel grid
+                        for (let x = 0; x < this.screen.width; x += 16) {
+                            for (let y = 0; y < this.screen.height; y += 16) {
+                                this.ctx.fillStyle = `rgb(${this.registers.A}, 0, 0)`;
+                                this.ctx.fillRect(x, y, 16, 16);
+                            }
+                        }
+                        this.registers.PC += 2;
+                        break;
+                    
+                    case 0x23: // Initialize sprite position
+                        this.registers.X = this.memory[this.registers.PC + 1];
+                        this.registers.Y = this.memory[this.registers.PC + 2];
+                        this.registers.PC += 2;
+                        break;
+                    
+                    case 0x24: // Move sprite
+                        this.registers.X += this.memory[this.registers.PC + 1];
+                        this.registers.Y += this.memory[this.registers.PC + 2];
+                        this.registers.PC += 2;
+                        break;
+                    
+                    case 0xFF: // End program
+                        return false;
+                }
+                
+                this.registers.PC++;
+                return true;
+            }
+
+            updateRegisterDisplay() {
+                document.getElementById('reg-a').textContent = 
+                    this.registers.A.toString(16).padStart(2, '0').toUpperCase();
+                document.getElementById('reg-x').textContent = 
+                    this.registers.X.toString(16).padStart(2, '0').toUpperCase();
+                document.getElementById('reg-y').textContent = 
+                    this.registers.Y.toString(16).padStart(2, '0').toUpperCase();
+                document.getElementById('program-counter').textContent = 
+                    this.registers.PC.toString(16).padStart(2, '0').toUpperCase();
+            }
+        }
+
+        // Setup
+        const screen = document.getElementById('screen');
+        const computer = new EightBitComputer(screen);
+        
+        let runInterval = null;
+
+        // Event Listeners
+        document.getElementById('load-btn').addEventListener('click', () => {
+            const programSelector = document.getElementById('program-selector');
+            const selectedProgram = programSelector.value;
+            
+            if (computer.loadProgram(selectedProgram)) {
+                computer.updateRegisterDisplay();
             }
         });
 
-        stopButton.addEventListener('click', () => {
-            if (animationFrame) {
-                cancelAnimationFrame(animationFrame);
-                animationFrame = null;
-            }
+        document.getElementById('run-btn').addEventListener('click', () => {
+            if (runInterval) clearInterval(runInterval);
             
-            // Disable mouse tracking if exists
-            const programSelector = document.getElementById('programSelector');
-            const currentProgram = programSelector.value;
-            
-            if (currentProgram === 'mouseTracker') {
-                screen.removeEventListener('mousemove', onMouseMove);
-            }
+            runInterval = setInterval(() => {
+                if (!computer.executeInstruction()) {
+                    clearInterval(runInterval);
+                }
+                computer.updateRegisterDisplay();
+            }, 500);
+        });
 
-            ctx.clearRect(0, 0, screen.width, screen.height);
+        document.getElementById('stop-btn').addEventListener('click', () => {
+            if (runInterval) {
+                clearInterval(runInterval);
+                runInterval = null;
+            }
         });
     </script>
 </body>
